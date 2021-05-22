@@ -18,6 +18,11 @@ bool printtimeok =true;
 bool timelimited = true;
 bool debug = false;
 bool io = true;
+bool isInverterOn ;
+bool isBatteryOn;
+bool isPPVOn ;
+bool isGridOn ;
+
 String inputString = "";         // a String to hold incoming data
 bool stringComplete = false;  // whether the string is complete
  void showWarning(String message);
@@ -43,10 +48,12 @@ void runSelfTest();
  void showWarning(String message);
 
  void showReport(String message);
-
+void printVoltages();
+void printActive();
+void printDeactive();
 void setup() {
   // put your setup code here, to run once:
- Serial.begin(9600);
+ Serial.begin(115200);
   // reserve 200 bytes for the inputString:
   inputString.reserve(200);
  pinMode(ledPin, OUTPUT);
@@ -75,7 +82,17 @@ if (stringComplete) {
   }
 batv = senseBattVoltage();
 ppv = sensePPVVoltage();
-
+if (batv <= 2.5) {
+chargeBatteryDisconnect();
+}
+if (batv >2.5) {
+chargeBatteryConnect();
+}
+if (batv > 2.52 ) {
+inverterOn();
+}else{
+  inverterOff();
+}
 
 }
 // senses ppv voltage
@@ -86,62 +103,46 @@ float sensePPVVoltage()
   float voltage = sensorValue * (5.0 / 1023.0);
   // print out the value you read:
 
-  // print out the value you read:
-if (ppv >= 2.4) {
-ppvNominal = true;
-}else {
-ppvNominal = false;
-}
-if (ppvNominal) {
-//showReport("PPv voltage::");
- // Serial.println(voltage);
-}
+ 
 
 
   return voltage;
 }
 void serialCommandIssued(String commandName , int extra)
-{if(commandName == "0"){extra =0;}
-if(commandName == "1"){extra =1;}
-if(commandName == "2"){extra =2;}
+{if(commandName == "active"){extra =0;}
+if(commandName == "off"){extra =1;}
+if(commandName == "volt"){extra =2;}
 if(commandName == "grid on"){extra =4;}
-if(commandName == "grid off"){extra =3;}
+if(commandName == "debug"){extra =3;}
 if(commandName == "battery"){extra =5;}
 if(commandName == "ppv"){extra =6;}
 if(commandName == "battery on"){extra =7;}
 if(commandName == "battery off"){extra =8;}
 
 digitalWrite(ledPin,HIGH);
-delay(1000);
+delay(100);
 digitalWrite(ledPin,LOW);
 float b ,p;
 //if(commandName == "3"){extra =3;}
 switch (extra) {
   case 0:
-inverterOff();
-chargeBatteryDisconnect();
-digitalWrite(ppvConnect, HIGH);
-
+printActive();
   break;
   case 1:
-  if (debug==true){
-   debug = false;
-  }else{
-    debug = true;
-  }
+ gridDisconnect();
+ chargeBatteryDisconnect();
+ inverterOff();
+
 
   break;
    case 2:
- if (printtimeok==true){
-   printtimeok = false;
-  }else{
-    printtimeok = true;
-  }  break;
+ printVoltages();
+  break;
    case 3:
-if (timelimited==true){
-   timelimited = false;
+if (debug==true){
+   debug = false;
   }else{
-    timelimited = true;
+    debug = true;
   } 
   break;
    case 4:
@@ -201,7 +202,7 @@ float senseCurrent()
    map(sensorValue,0,1023,0,5);
   float voltage = sensorValue * (5.0 / 1023.0) ;
   // print out the value you read:
-  if(debug)Serial.println(voltage);
+ 
 
 return voltage/shuntValue;
 }
@@ -214,14 +215,13 @@ float senseBattVoltage()
   map(sensorValue,0,1023,0,5);
   float voltage = sensorValue * (5.0 / 1023.0);
   // print out the value you read:
-  if(printtimeok)Serial.println("battery voltage::");
-   if(printtimeok)Serial.println(voltage);
-   printtimeok =false;
+  
    return voltage;
 }
 // connects ppv to batteries
 void chargeBatteryConnect ()
-{  
+{  isBatteryOn = true;
+isPPVOn =true;
   digitalWrite(battConnect, LOW);
 digitalWrite(ppvConnect, LOW);
 
@@ -229,7 +229,8 @@ digitalWrite(ppvConnect, LOW);
 }
 // disconnect ppv from  batteries
 void chargeBatteryDisconnect()
-{
+{isBatteryOn = false;
+isPPVOn = false;
  digitalWrite(battConnect, HIGH);
 digitalWrite(ppvConnect, HIGH);
 
@@ -238,14 +239,15 @@ digitalWrite(ppvConnect, HIGH);
 //connects ac side of inverter to full load.
 void gridConnect()
 {
-gridOn = true;
+isGridOn = true;
+isInverterOn = false;
 digitalWrite(gridConnectPin , LOW);
-
+digitalWrite(inverterPin , HIGH);
 }
 //disconnects ac side of inverter from full load.
 void gridDisconnect()
 {
- gridOn = false;
+ isGridOn = false;
 digitalWrite(gridConnectPin , HIGH);
 
   
@@ -253,18 +255,18 @@ digitalWrite(gridConnectPin , HIGH);
 //turns on dc power to inverter
 void inverterOn()
 {
- gridOn = false;
+ isGridOn = false;
+ isInverterOn = true;
 digitalWrite(gridConnectPin , HIGH);
 digitalWrite(inverterPin , LOW);
 
 
-if(io == true)Serial.println("\t WARNING! : \n \tinverter Is On.\n\t WARNING!");
-io = false;
+
 }
 //turns off the dc power to inverter.
 void inverterOff()
 {
-
+isInverterOn = false;
 digitalWrite(inverterPin , HIGH);
 
 }
@@ -283,13 +285,13 @@ void inverterLowCompacity()
 void runSelfTest()
 {
   float bv = senseBattVoltage();
-if (bv <= 3.0f){
+if (bv <= 1.50f){
 showWarning("no battery preasent");
 
 }
 delay(1000);
 float solpanv = sensePPVVoltage();
-if (solpanv >= 3.0f)
+if (solpanv >= 1.0f)
 {
 
 Serial.println("panels:");
@@ -348,5 +350,33 @@ Serial.println(message);
 
 }
 
+
+}
+void printVoltages(){
+float solpanv = sensePPVVoltage();
+Serial.println("panels:\t");Serial.println(solpanv);
+float b =  senseBattVoltage();
+Serial.println("Battery Voltage:\t");Serial.println(b);
+
+}
+void printActive(){
+if(isBatteryOn == true){
+  Serial.println("Battery is ON:"); Serial.println(batv);
+}else {
+ Serial.println("Battery is OFF:");
+}
+ if(isInverterOn == true){Serial.println("Inverter is ON:");
+ }else {
+ Serial.println("Inverter is OFF:");
+ }
+if(isPPVOn == true){ Serial.println("PPV is ON:"); Serial.println(ppv);
+
+}else {
+ Serial.println("PPV is OFF:");
+}
+if(isGridOn == true){ Serial.println("Grid is ON");
+}else {
+Serial.println("Grid is OFF");
+}
 
 }
