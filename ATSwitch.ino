@@ -352,13 +352,7 @@ Serial.println(message);
 
 
 }
-void printVoltages(){
-float solpanv = sensePPVVoltage();
-Serial.println("panels:\t");Serial.println(solpanv);
-float b =  senseBattVoltage();
-Serial.println("Battery Voltage:\t");Serial.println(b);
 
-}
 void printActive(){
 if(isBatteryOn == true){
   Serial.println("Battery is ON:"); Serial.println(batv);
